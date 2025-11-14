@@ -14,15 +14,18 @@ class ProtocolChoice(str, Enum):
 
 
 class TracerouteRequest(BaseModel):
-    ips: List[str]
+    targets: List[str]
+
 
 app = FastAPI()
 MAX_GLOBAL_THREADS = 32
 global_executor = ThreadPoolExecutor(max_workers=MAX_GLOBAL_THREADS)
 
+
 @app.on_event("shutdown")
 def shutdown_event():
     global_executor.shutdown(wait=True)
+
 
 @app.post("/trace", response_model=Dict[str, dict])
 def trace_route(
@@ -40,8 +43,8 @@ def trace_route(
     results = {}
 
     futures = {
-        global_executor.submit(run_trace, ip, queries, max_steps, protocol_map[protocol]): ip
-        for ip in request.ips
+        global_executor.submit(run_trace, target, queries, max_steps, protocol_map[protocol]): target
+        for target in request.targets
     }
     for future in as_completed(futures):
         ip, data = future.result()
@@ -50,9 +53,9 @@ def trace_route(
     return results
 
 
-def run_trace(ip: str, queries: int = 3, max_steps: int = 30, protocol: Protocol = Protocol.TCP):
+def run_trace(target: str, queries: int = 3, max_steps: int = 30, protocol: Protocol = Protocol.TCP):
     try:
-        result = traceroute(ip, queries=queries, max_steps=max_steps, protocol=protocol)
-        return ip, result.to_dict()
+        result = traceroute(target, queries=queries, max_steps=max_steps, protocol=protocol)
+        return target, result.to_dict()
     except Exception as e:
-        return ip, {"error": str(e)}
+        return target, {"error": str(e)}
